@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useData } from '../lib/data'
 import { useAuth } from '../lib/auth'
-import { fetchAll, supabase } from '../lib/supabase'
+import { clearViewToken, fetchAll, supabase } from '../lib/supabase'
 import { downloadFile } from '../lib/export'
 import { currentMonth, fmtMonth, monthStart } from '../lib/format'
 import { confirmDelete, Btn, ErrorMsg, Field, PageHead } from '../components/ui'
@@ -26,6 +26,22 @@ export default function Settings() {
   const delCat = (id: string, name: string) => confirmDelete(`category "${name}" (its expenses become uncategorised)`) && run(supabase.from('categories').delete().eq('id', id), 'Category deleted')
   const setRole = (id: string, role: string) => run(supabase.from('profiles').update({ role }).eq('id', id), 'Role updated').then(() => setUsers(u => u.map(x => x.id === id ? { ...x, role: role as Profile['role'] } : x)))
 
+  const [link, setLink] = useState('')
+  useEffect(() => { if (isAdmin) supabase.from('viewer_link').select('token').maybeSingle().then(({ data }) => setLink(data?.token ? `${window.location.origin}/#view=${data.token}` : '')) }, [isAdmin])
+  async function genLink() {
+    if (link && !window.confirm('Generate a new link? The old link stops working for everyone.')) return
+    const token = [...crypto.getRandomValues(new Uint8Array(24))].map(b => b.toString(16).padStart(2, '0')).join('')
+    const { error } = await supabase.from('viewer_link').upsert({ id: 1, token, updated_at: new Date().toISOString() })
+    if (error) return setErr(error.message + ' (Did you run supabase/migration_viewer_link.sql?)')
+    setErr(''); setLink(`${window.location.origin}/#view=${token}`); setMsg('Viewer link ready - copy it below')
+  }
+  async function revokeLink() {
+    if (!window.confirm('Turn off the viewer link? Nobody can open the site without signing in.')) return
+    const { error } = await supabase.from('viewer_link').delete().eq('id', 1)
+    if (error) setErr(error.message); else { setLink(''); setMsg('Viewer link turned off') }
+  }
+  async function copyLink() { try { await navigator.clipboard.writeText(link); setMsg('Link copied') } catch { setErr('Copy failed - select the link and copy it manually') } }
+
   async function backup() {
     try { const out: Record<string, unknown> = { version: 1, exported_at: new Date().toISOString() }
       for (const [t, o] of TABLES) out[t] = await fetchAll(t, o)
@@ -48,9 +64,16 @@ export default function Settings() {
     <div className="space-y-4">
       <PageHead title="Settings" />
       <ErrorMsg text={err} />{msg && <p className="rounded-lg bg-green-50 p-2 text-sm text-green-700">{msg}</p>}
-      <div className="card"><h2 className="font-semibold">Account</h2><p className="text-sm text-gray-600">{session?.user.email} - {profile?.role.toUpperCase()}</p><Btn variant="ghost" className="mt-2" onClick={signOut}>Sign out</Btn></div>
+      <div className="card"><h2 className="font-semibold">Account</h2>{session
+        ? <><p className="text-sm text-gray-600">{session.user.email} - {profile?.role.toUpperCase()}</p><Btn variant="ghost" className="mt-2" onClick={signOut}>Sign out</Btn></>
+        : <><p className="text-sm text-gray-600">Viewing through a shared link (read-only).</p><Btn variant="ghost" className="mt-2" onClick={clearViewToken}>Admin sign in</Btn></>}</div>
 
       {isAdmin && <>
+        <div className="card"><h2 className="mb-1 font-semibold">Viewer link</h2>
+          <p className="mb-2 text-xs text-gray-500">Roommates who open this link see everything read-only, with no sign-in. Anyone with the link can view, so share it only with roommates. Generate it while on your live site so the address is correct.</p>
+          {link && <input readOnly className="input mb-2" value={link} onFocus={e => e.target.select()} />}
+          <div className="flex flex-wrap gap-2"><Btn variant="blue" onClick={genLink}>{link ? 'Regenerate link' : 'Generate link'}</Btn>
+            {link && <><Btn variant="ghost" onClick={copyLink}>Copy</Btn><Btn variant="danger" onClick={revokeLink}>Turn off</Btn></>}</div></div>
         <div className="card"><h2 className="mb-2 font-semibold">Monthly budget</h2>
           <div className="grid grid-cols-2 gap-2"><Field label="Month"><input type="month" className="input" value={bMonth} onChange={e => e.target.value && setBMonth(e.target.value)} /></Field>
             <Field label="Budget (INR)"><input type="number" min="0" className="input" value={bAmt} onChange={e => setBAmt(e.target.value)} /></Field></div>

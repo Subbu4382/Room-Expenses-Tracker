@@ -1,5 +1,5 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
-import { fetchAll, supabase } from './supabase'
+import { fetchAll, supabase, viewToken } from './supabase'
 import { Budget, Category, Closing, Contribution, Expense, Member, Room } from './types'
 
 interface DataState {
@@ -17,7 +17,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     try {
       const { data: room, error } = await supabase.from('rooms').select('*').order('created_at').limit(1).maybeSingle()
       if (error) throw error
-      if (!room) throw new Error('No room found. Run the seed section of supabase/schema.sql.')
+      if (!room) throw new Error(viewToken ? 'This viewer link is invalid or was revoked. Ask the admin for a new link.' : 'No room found. Run the seed section of supabase/schema.sql.')
       const [members, categories, expenses, contributions, budgets, closings] = await Promise.all([
         fetchAll<Member>('room_members', 'created_at'), fetchAll<Category>('categories', 'created_at'),
         fetchAll<Expense>('expenses', 'expense_date'), fetchAll<Contribution>('contributions', 'paid_on'),
