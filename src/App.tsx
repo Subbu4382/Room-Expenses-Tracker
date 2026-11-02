@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react'
-import { BarChart3, CalendarDays, Home, Menu, PiggyBank, Receipt, Settings as Cog, Users, X } from 'lucide-react'
+import { BarChart3, CalendarDays, Home, Menu, PiggyBank, Receipt, Settings as Cog, Users, Wallet, X } from 'lucide-react'
 import { AuthProvider, useAuth } from './lib/auth'
 import { DataProvider, useData } from './lib/data'
 import { clearViewToken, configured, supabase, viewToken } from './lib/supabase'
@@ -10,13 +10,14 @@ import Members from './pages/Members'
 import Contributions from './pages/Contributions'
 import Reports from './pages/Reports'
 import History from './pages/History'
+import Personal from './pages/Personal'
 import SettingsPage from './pages/Settings'
 
 const PAGES = [
   { id: 'dash', label: 'Dashboard', icon: Home, C: Dashboard }, { id: 'exp', label: 'Expenses', icon: Receipt, C: Expenses },
   { id: 'con', label: 'Contributions', icon: PiggyBank, C: Contributions }, { id: 'mem', label: 'Members', icon: Users, C: Members },
   { id: 'rep', label: 'Reports', icon: BarChart3, C: Reports }, { id: 'his', label: 'History', icon: CalendarDays, C: History },
-  { id: 'set', label: 'Settings', icon: Cog, C: SettingsPage }]
+  { id: 'per', label: 'Personal Expenses', icon: Wallet, C: Personal }, { id: 'set', label: 'Settings', icon: Cog, C: SettingsPage }]
 
 function Login() {
   const [email, setEmail] = useState(''); const [pw, setPw] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false)
@@ -46,7 +47,7 @@ function Shell() {
         <p.icon size={18} />{p.label}</button>))}</nav>)
   return (
     <div className="min-h-screen bg-gray-50 md:flex">
-      <aside className="hidden w-56 shrink-0 border-r bg-white md:block"><div className="p-4 text-lg font-bold"><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></div>{nav}
+      <aside className="hidden w-56 shrink-0 border-r bg-white md:block"><div className="p-4 text-lg font-bold">   <span className="inline-flex items-center gap-2"><img src="/favicon.svg" alt="" className="h-7 w-7" /><span><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></span></span></div>{nav}
         <p className="p-4 text-xs text-gray-500">Role: {profile?.role ?? 'viewer'}</p></aside>
       <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-white p-3 md:hidden">
         <span className="font-bold"><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></span>

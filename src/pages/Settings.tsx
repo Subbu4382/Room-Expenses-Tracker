@@ -17,7 +17,8 @@ export default function Settings() {
   const [newCat, setNewCat] = useState(''); const [users, setUsers] = useState<Profile[]>([])
 
   useEffect(() => { setBAmt(String(budgets.find(b => b.month === monthStart(bMonth))?.amount ?? '')) }, [bMonth, budgets])
-  useEffect(() => { if (isAdmin) supabase.from('profiles').select('*').order('created_at').then(({ data }) => setUsers((data ?? []) as Profile[])) }, [isAdmin])
+  const loadUsers = () => supabase.from('profiles').select('*').order('created_at').then(({ data }) => setUsers((data ?? []) as Profile[]))
+  useEffect(() => { if (isAdmin) loadUsers() }, [isAdmin])
   const run = async (p: PromiseLike<{ error: { message: string } | null }>, ok: string) => { setErr(''); setMsg(''); const { error } = await p; if (error) setErr(error.message); else { setMsg(ok); await reload() } }
 
   const saveBudget = () => Number(bAmt) >= 0 && bAmt !== '' ? run(supabase.from('monthly_budgets').upsert({ room_id: room!.id, month: monthStart(bMonth), amount: Number(bAmt) }, { onConflict: 'room_id,month' }), 'Budget saved') : setErr('Enter a valid budget')
@@ -25,6 +26,31 @@ export default function Settings() {
   const renameCat = (id: string, old: string) => { const n = window.prompt('Rename category', old); if (n && n.trim() && n !== old) run(supabase.from('categories').update({ name: n.trim() }).eq('id', id), 'Category renamed') }
   const delCat = (id: string, name: string) => confirmDelete(`category "${name}" (its expenses become uncategorised)`) && run(supabase.from('categories').delete().eq('id', id), 'Category deleted')
   const setRole = (id: string, role: string) => run(supabase.from('profiles').update({ role }).eq('id', id), 'Role updated').then(() => setUsers(u => u.map(x => x.id === id ? { ...x, role: role as Profile['role'] } : x)))
+
+  const [nu, setNu] = useState({ name: '', email: '', password: '', role: 'viewer' }); const [userBusy, setUserBusy] = useState(false)
+  async function callUsers(body: Record<string, unknown>): Promise<string | null> {
+    const { data, error } = await supabase.functions.invoke('manage-users', { body })
+    if (error) { let m = error.message; try { const j = await (error as any).context.json(); if (j?.error) m = j.error } catch { /* keep generic message */ } return m }
+    return data?.error ?? null
+  }
+  async function addUser() {
+    if (!/^\S+@\S+\.\S+$/.test(nu.email)) return setErr('Enter a valid email')
+    if (nu.password.length < 6) return setErr('Password must be at least 6 characters')
+    setUserBusy(true); setErr(''); setMsg('')
+    const m = await callUsers({ action: 'create', ...nu }); setUserBusy(false)
+    if (m) return setErr(m)
+    setMsg(`User ${nu.email} added`); setNu({ name: '', email: '', password: '', role: 'viewer' }); loadUsers()
+  }
+  async function resetPw(u: Profile) {
+    const p = window.prompt(`New password for ${u.full_name ?? 'this user'} (min 6 characters)`)
+    if (!p) return
+    if (p.length < 6) return setErr('Password must be at least 6 characters')
+    const m = await callUsers({ action: 'reset_password', id: u.id, password: p }); if (m) setErr(m); else { setErr(''); setMsg('Password updated') }
+  }
+  async function delUser(u: Profile) {
+    if (!confirmDelete(`user "${u.full_name ?? 'this user'}" (their personal expenses are deleted too)`)) return
+    const m = await callUsers({ action: 'delete', id: u.id }); if (m) setErr(m); else { setErr(''); setMsg('User deleted'); loadUsers() }
+  }
 
   const [link, setLink] = useState('')
   useEffect(() => { if (isAdmin) supabase.from('viewer_link').select('token').maybeSingle().then(({ data }) => setLink(data?.token ? `${window.location.origin}/#view=${data.token}` : '')) }, [isAdmin])
@@ -84,10 +110,18 @@ export default function Settings() {
           <div className="mt-2 divide-y text-sm">{categories.map(c => <div key={c.id} className="flex items-center justify-between py-2"><span>{c.name}</span>
             <span className="flex gap-3"><button className="text-royal" onClick={() => renameCat(c.id, c.name)}>Rename</button><button className="text-red-600" onClick={() => delCat(c.id, c.name)}>Delete</button></span></div>)}</div></div>
 
-        <div className="card"><h2 className="mb-1 font-semibold">Viewer access</h2>
-          <p className="mb-2 text-xs text-gray-500">Create roommate accounts in Supabase Dashboard - Authentication - Users (signups should stay disabled). They appear here as VIEWER.</p>
-          {users.map(u => <div key={u.id} className="flex items-center justify-between py-1 text-sm"><span className="truncate">{u.full_name ?? u.id.slice(0, 8)}</span>
-            <select className="input w-auto" value={u.role} disabled={u.id === profile?.id} onChange={e => setRole(u.id, e.target.value)}><option value="viewer">Viewer</option><option value="admin">Admin</option></select></div>)}</div>
+        <div className="card"><h2 className="mb-1 font-semibold">Users &amp; access</h2>
+          <p className="mb-2 text-xs text-gray-500">Add roommates here. Viewers are read-only; admins have full access. Only admins see this section.</p>
+          <div className="grid grid-cols-2 gap-2">
+            <input className="input" placeholder="Name" value={nu.name} onChange={e => setNu({ ...nu, name: e.target.value })} />
+            <input className="input" type="email" placeholder="Email" value={nu.email} onChange={e => setNu({ ...nu, email: e.target.value })} />
+            <input className="input" placeholder="Password (min 6)" value={nu.password} onChange={e => setNu({ ...nu, password: e.target.value })} />
+            <select className="input" value={nu.role} onChange={e => setNu({ ...nu, role: e.target.value })}><option value="viewer">Viewer</option><option value="admin">Admin</option></select></div>
+          <Btn className="mt-2" onClick={addUser} disabled={userBusy}>{userBusy ? 'Adding...' : 'Add user'}</Btn>
+          <div className="mt-3 divide-y">{users.map(u => <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"><span className="min-w-0 truncate font-medium">{u.full_name ?? u.id.slice(0, 8)}{u.id === profile?.id && ' (you)'}</span>
+            <span className="flex items-center gap-2"><select className="input w-auto" value={u.role} disabled={u.id === profile?.id} onChange={e => setRole(u.id, e.target.value)}><option value="viewer">Viewer</option><option value="admin">Admin</option></select>
+              <button className="text-royal" onClick={() => resetPw(u)}>Reset password</button>
+              {u.id !== profile?.id && <button className="text-red-600" onClick={() => delUser(u)}>Delete</button>}</span></div>)}</div></div>
       </>}
 
       <div className="card"><h2 className="mb-2 font-semibold">Backup &amp; restore</h2>
