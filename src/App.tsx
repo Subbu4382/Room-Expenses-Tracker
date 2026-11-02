@@ -50,7 +50,7 @@ function Shell() {
       <aside className="hidden w-56 shrink-0 border-r bg-white md:block"><div className="p-4 text-lg font-bold">   <span className="inline-flex items-center gap-2"><img src="/favicon.svg" alt="" className="h-7 w-7" /><span><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></span></span></div>{nav}
         <p className="p-4 text-xs text-gray-500">Role: {profile?.role ?? 'viewer'}</p></aside>
       <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-white p-3 md:hidden">
-        <span className="font-bold"><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></span>
+        <span className="font-bold">   <span className="inline-flex items-center gap-2"><img src="/favicon.svg" alt="" className="h-7 w-7" /><span><span className="text-brand">Room</span> <span className="text-royal">Expenses</span></span></span></span>
         <button aria-label="Menu" onClick={() => setOpen(!open)}>{open ? <X /> : <Menu />}</button></header>
       {open && <div className="fixed inset-x-0 top-12 z-30 border-b bg-white shadow md:hidden">{nav}</div>}
       <main className="mx-auto w-full max-w-5xl flex-1 p-4">
